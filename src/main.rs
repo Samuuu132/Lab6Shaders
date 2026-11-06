@@ -20,9 +20,10 @@ const HEIGHT: usize = 600;
 #[derive(Clone, Copy, PartialEq)]
 enum Body {
     Star,
+    Rocky,
 }
 
-const BODIES: [(Body, &str); 1] = [(Body::Star, "Estrella")];
+const BODIES: [(Body, &str); 2] = [(Body::Star, "Estrella"), (Body::Rocky, "Planeta rocoso")];
 
 fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
     let spin = Mat3::rot_y(time * 0.3);
@@ -36,6 +37,29 @@ fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
             rotation: spin,
             shader: shaders::star::star,
         }],
+        Body::Rocky => {
+            // Eje inclinado + rotacion lenta. La luna orbita y siempre muestra la misma cara.
+            let tilt = Mat3::rot_z(0.35);
+            let planet_rot = tilt.mul(&Mat3::rot_y(time * 0.12));
+            let a = time * 0.3;
+            let moon_pos = Vector3::new(a.cos() * 1.65, 0.28 * a.sin(), -a.sin() * 1.65 - 0.2);
+            vec![
+                Object {
+                    mesh: sphere,
+                    position: Vector3::ZERO,
+                    scale: 1.0,
+                    rotation: planet_rot,
+                    shader: shaders::rocky::rocky,
+                },
+                Object {
+                    mesh: sphere,
+                    position: moon_pos,
+                    scale: 0.26,
+                    rotation: Mat3::rot_y(a),
+                    shader: shaders::moon::moon,
+                },
+            ]
+        }
     };
 
     Scene { objects, light, time }

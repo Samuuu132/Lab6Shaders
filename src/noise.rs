@@ -147,3 +147,18 @@ pub fn ridged(p: Vector3, octaves: u32) -> f32 {
     }
     sum / norm
 }
+
+/// Hash entero de una celda de la rejilla -> 4 numeros pseudoaleatorios en [0, 1).
+/// Sirve para colocar un punto (y un tamano) aleatorio dentro de cada celda.
+pub fn cell_hash(x: i32, y: i32, z: i32) -> [f32; 4] {
+    let mut h = (x as u32).wrapping_mul(374761393)
+        ^ (y as u32).wrapping_mul(668265263)
+        ^ (z as u32).wrapping_mul(2246822519);
+    let mut out = [0.0; 4];
+    for o in out.iter_mut() {
+        h = (h ^ (h >> 13)).wrapping_mul(1274126177);
+        h ^= h >> 16;
+        *o = (h & 0xFFFF) as f32 / 65536.0;
+    }
+    out
+}

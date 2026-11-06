@@ -1,6 +1,8 @@
 use raylib::prelude::*;
 use crate::transform::Mat3;
 
+pub mod moon;
+pub mod rocky;
 pub mod star;
 
 /// Todo lo que un fragment shader puede consultar sobre su pixel.
@@ -41,4 +43,20 @@ pub fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 
 pub fn saturate(x: f32) -> f32 {
     x.clamp(0.0, 1.0)
+}
+
+/// Rota un vector alrededor del eje Y.
+pub fn rotate_y(v: Vector3, a: f32) -> Vector3 {
+    let (s, c) = a.sin_cos();
+    Vector3::new(c * v.x + s * v.z, v.y, -s * v.x + c * v.z)
+}
+
+/// Perturba una normal con el gradiente de un campo de altura escalar
+/// (bump mapping). `h0` es la altura en `p` y `hx/hy/hz` las alturas en puntos
+/// desplazados `eps` sobre cada eje. No toca la geometria: solo la normal
+/// con la que se calcula la luz.
+pub fn bump_normal(n: Vector3, h0: f32, hx: f32, hy: f32, hz: f32, eps: f32, strength: f32) -> Vector3 {
+    let g = Vector3::new(hx - h0, hy - h0, hz - h0) * (1.0 / eps);
+    let tangent = g - n * g.dot(n);
+    (n - tangent * strength).normalize()
 }
