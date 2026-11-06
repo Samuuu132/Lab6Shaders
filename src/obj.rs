@@ -56,4 +56,28 @@ impl Mesh {
 
         Mesh { vertices, normals, indices }
     }
+
+    /// Disco plano (anillo) en el plano XZ, de radio interior `inner` a exterior `outer`.
+    /// Es una malla generada por codigo; la apariencia sale del fragment shader.
+    pub fn ring(inner: f32, outer: f32, segments: usize) -> Mesh {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for i in 0..segments {
+            let a = i as f32 / segments as f32 * std::f32::consts::TAU;
+            let (s, c) = a.sin_cos();
+            vertices.push(Vector3::new(c * inner, 0.0, s * inner));
+            vertices.push(Vector3::new(c * outer, 0.0, s * outer));
+        }
+
+        for i in 0..segments {
+            let j = (i + 1) % segments;
+            let (a0, a1, b0, b1) = (2 * i, 2 * i + 1, 2 * j, 2 * j + 1);
+            indices.push([a0, a1, b0]);
+            indices.push([a1, b1, b0]);
+        }
+
+        let normals = vec![Vector3::new(0.0, 1.0, 0.0); vertices.len()];
+        Mesh { vertices, normals, indices }
+    }
 }

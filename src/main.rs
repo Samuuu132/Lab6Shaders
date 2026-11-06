@@ -21,11 +21,24 @@ const HEIGHT: usize = 600;
 enum Body {
     Star,
     Rocky,
+    Gas,
 }
 
-const BODIES: [(Body, &str); 2] = [(Body::Star, "Estrella"), (Body::Rocky, "Planeta rocoso")];
+const BODIES: [(Body, &str); 3] = [
+    (Body::Star, "Estrella"),
+    (Body::Rocky, "Planeta rocoso"),
+    (Body::Gas, "Gigante gaseoso"),
+];
 
-fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
+/// Mallas compartidas. Todos los cuerpos usan la esfera; solo los anillos
+/// necesitan un disco generado por codigo.
+struct Meshes {
+    sphere: Mesh,
+    ring: Mesh,
+}
+
+fn build_scene<'a>(body: Body, meshes: &'a Meshes, time: f32) -> Scene<'a> {
+    let sphere = &meshes.sphere;
     let spin = Mat3::rot_y(time * 0.3);
     let light = Vector3::new(-0.6, 0.35, 0.7).normalize();
 
@@ -36,6 +49,7 @@ fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
             scale: 1.0,
             rotation: spin,
             shader: shaders::star::star,
+            mask: None,
         }],
         Body::Rocky => {
             // Eje inclinado + rotacion lenta. La luna orbita y siempre muestra la misma cara.
@@ -50,6 +64,7 @@ fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
                     scale: 1.0,
                     rotation: planet_rot,
                     shader: shaders::rocky::rocky,
+                    mask: None,
                 },
                 Object {
                     mesh: sphere,
@@ -57,6 +72,29 @@ fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
                     scale: 0.26,
                     rotation: Mat3::rot_y(a),
                     shader: shaders::moon::moon,
+                    mask: None,
+                },
+            ]
+        }
+        Body::Gas => {
+            // Planeta y anillos comparten la inclinacion; solo el planeta gira.
+            let tilt = Mat3::rot_z(-0.25).mul(&Mat3::rot_x(0.30));
+            vec![
+                Object {
+                    mesh: sphere,
+                    position: Vector3::ZERO,
+                    scale: 0.58,
+                    rotation: tilt.mul(&Mat3::rot_y(time * 0.10)),
+                    shader: shaders::gas::gas_giant,
+                    mask: None,
+                },
+                Object {
+                    mesh: &meshes.ring,
+                    position: Vector3::ZERO,
+                    scale: 0.58,
+                    rotation: tilt,
+                    shader: shaders::rings::ring,
+                    mask: Some(shaders::rings::mask),
                 },
             ]
         }
@@ -66,8 +104,15 @@ fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
 }
 
 fn main() {
-    let sphere = Mesh::load_sphere("models/sphere.obj");
-    println!("Esfera: {} vertices, {} triangulos", sphere.vertices.len(), sphere.indices.len());
+    let meshes = Meshes {
+        sphere: Mesh::load_sphere("models/sphere.obj"),
+        ring: Mesh::ring(shaders::rings::RING_INNER, shaders::rings::RING_OUTER, 256),
+    };
+    println!(
+        "Esfera: {} vertices, {} triangulos",
+        meshes.sphere.vertices.len(),
+        meshes.sphere.indices.len()
+    );
 
     let camera = Camera::new(Vector3::new(0.0, 0.0, 3.2), 45.0, WIDTH as f32, HEIGHT as f32);
     let mut fb = Framebuffer::new(WIDTH, HEIGHT, Color::new(4, 4, 10, 255));
@@ -76,7 +121,7 @@ fn main() {
     if args.iter().any(|a| a == "--save-images") {
         std::fs::create_dir_all("images").expect("No se pudo crear la carpeta images");
         for (i, (body, name)) in BODIES.iter().enumerate() {
-            render(&mut fb, &build_scene(*body, &sphere, 1.0), &camera);
+            render(&mut fb, &build_scene(*body, &meshes, 1.0), &camera);
             let path = format!("images/{}_{}.png", i + 1, name.to_lowercase().replace(' ', "_"));
             fb.save_png(&path);
             println!("Guardado {path}");
@@ -114,7 +159,7 @@ fn main() {
         }
 
         let time = rl.get_time() as f32;
-        render(&mut fb, &build_scene(BODIES[current].0, &sphere, time), &camera);
+        render(&mut fb, &build_scene(BODIES[current].0, &meshes, time), &camera);
         texture.update_texture(&fb.pixels).expect("No se pudo actualizar la textura");
 
         let mut d = rl.begin_drawing(&thread);

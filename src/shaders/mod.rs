@@ -1,7 +1,9 @@
 use raylib::prelude::*;
 use crate::transform::Mat3;
 
+pub mod gas;
 pub mod moon;
+pub mod rings;
 pub mod rocky;
 pub mod star;
 
@@ -9,6 +11,8 @@ pub mod star;
 pub struct FragmentIn {
     /// Punto sobre la esfera unitaria en espacio de objeto (gira con el cuerpo).
     pub point: Vector3,
+    /// Posicion sin normalizar en espacio de objeto (util para mallas que no son esfera).
+    pub position: Vector3,
     /// Normal en espacio de mundo.
     pub normal: Vector3,
     /// Normal en espacio de objeto.

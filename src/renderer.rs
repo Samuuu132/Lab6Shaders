@@ -13,6 +13,10 @@ pub struct Object<'a> {
     pub scale: f32,
     pub rotation: Mat3,
     pub shader: ShaderFn,
+    /// Prueba de descarte (como `discard` en GLSL): si devuelve false el
+    /// fragmento no existe, ni siquiera tapa lo que esta detras. Recibe la
+    /// posicion en espacio de objeto.
+    pub mask: Option<fn(Vector3) -> bool>,
 }
 
 pub struct Scene<'a> {
@@ -55,6 +59,9 @@ pub fn render(fb: &mut Framebuffer, scene: &Scene, camera: &Camera) {
     for (id, obj) in scene.objects.iter().enumerate() {
         let triangles = vertex_stage(obj, camera);
         for frag in rasterize(&triangles, fb.width, fb.height) {
+            if obj.mask.is_some_and(|m| !m(frag.position)) {
+                continue;
+            }
             let slot = &mut gbuffer[frag.y as usize * fb.width + frag.x as usize];
             if slot.map_or(true, |(old, _)| frag.depth < old.depth) {
                 *slot = Some((frag, id));
@@ -92,6 +99,7 @@ fn shade(obj: &Object, frag: &Fragment, scene: &Scene, camera: &Camera) -> Vecto
 
     let input = FragmentIn {
         point: frag.position.normalize(),
+        position: frag.position,
         normal: obj.rotation.apply(normal_obj),
         normal_obj,
         light: scene.light,
