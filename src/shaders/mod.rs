@@ -1,7 +1,10 @@
 use raylib::prelude::*;
 use crate::transform::Mat3;
 
+pub mod alien;
 pub mod gas;
+pub mod ice;
+pub mod lava;
 pub mod moon;
 pub mod rings;
 pub mod rocky;

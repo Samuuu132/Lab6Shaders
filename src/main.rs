@@ -22,12 +22,18 @@ enum Body {
     Star,
     Rocky,
     Gas,
+    Lava,
+    Ice,
+    Alien,
 }
 
-const BODIES: [(Body, &str); 3] = [
+const BODIES: [(Body, &str); 6] = [
     (Body::Star, "Estrella"),
     (Body::Rocky, "Planeta rocoso"),
     (Body::Gas, "Gigante gaseoso"),
+    (Body::Lava, "Planeta de lava"),
+    (Body::Ice, "Planeta de hielo"),
+    (Body::Alien, "Planeta bioluminiscente"),
 ];
 
 /// Mallas compartidas. Todos los cuerpos usan la esfera; solo los anillos
@@ -37,10 +43,26 @@ struct Meshes {
     ring: Mesh,
 }
 
-fn build_scene<'a>(body: Body, meshes: &'a Meshes, time: f32) -> Scene<'a> {
+/// Planeta solitario: esfera completa con leve inclinacion y rotacion lenta.
+fn single(sphere: &Mesh, time: f32, shader: shaders::ShaderFn) -> Object<'_> {
+    Object {
+        mesh: sphere,
+        position: Vector3::ZERO,
+        scale: 1.0,
+        rotation: Mat3::rot_z(0.25).mul(&Mat3::rot_y(time * 0.15)),
+        shader,
+        mask: None,
+    }
+}
+
+fn build_scene<'a>(body: Body, meshes: &'a Meshes, time: f32, orbit_light: bool) -> Scene<'a> {
     let sphere = &meshes.sphere;
     let spin = Mat3::rot_y(time * 0.3);
-    let light = Vector3::new(-0.6, 0.35, 0.7).normalize();
+    let mut light = Vector3::new(-0.6, 0.35, 0.7).normalize();
+    if orbit_light {
+        // La luz da una vuelta completa: muestra dia/noche, terminador y sombras en movimiento.
+        light = shaders::rotate_y(light, time * 0.6);
+    }
 
     let objects = match body {
         Body::Star => vec![Object {
@@ -98,9 +120,16 @@ fn build_scene<'a>(body: Body, meshes: &'a Meshes, time: f32) -> Scene<'a> {
                 },
             ]
         }
+        Body::Lava => vec![single(sphere, time, shaders::lava::lava)],
+        Body::Ice => vec![single(sphere, time, shaders::ice::ice)],
+        Body::Alien => vec![single(sphere, time, shaders::alien::alien)],
     };
 
     Scene { objects, light, time }
+}
+
+fn slug(name: &str) -> String {
+    name.to_lowercase().replace(' ', "_")
 }
 
 fn main() {
@@ -121,11 +150,30 @@ fn main() {
     if args.iter().any(|a| a == "--save-images") {
         std::fs::create_dir_all("images").expect("No se pudo crear la carpeta images");
         for (i, (body, name)) in BODIES.iter().enumerate() {
-            render(&mut fb, &build_scene(*body, &meshes, 1.0), &camera);
-            let path = format!("images/{}_{}.png", i + 1, name.to_lowercase().replace(' ', "_"));
+            render(&mut fb, &build_scene(*body, &meshes, 1.0, false), &camera);
+            let path = format!("images/{}_{}.png", i + 1, slug(name));
             fb.save_png(&path);
             println!("Guardado {path}");
         }
+        return;
+    }
+
+    // --save-frames <cuerpo 1-6> <cantidad> <dt> [--orbit-light]
+    // Guarda una secuencia de cuadros en frames/<cuerpo>/ para armar GIFs
+    // (ver tools/make_gifs.py).
+    if let Some(i) = args.iter().position(|a| a == "--save-frames") {
+        let index: usize = args[i + 1].parse::<usize>().expect("cuerpo invalido") - 1;
+        let count: usize = args[i + 2].parse().expect("cantidad invalida");
+        let dt: f32 = args[i + 3].parse().expect("dt invalido");
+        let orbit = args.iter().any(|a| a == "--orbit-light");
+        let (body, name) = BODIES[index];
+        let dir = format!("frames/{}", slug(name));
+        std::fs::create_dir_all(&dir).expect("No se pudo crear la carpeta de cuadros");
+        for k in 0..count {
+            render(&mut fb, &build_scene(body, &meshes, 1.0 + k as f32 * dt, orbit), &camera);
+            fb.save_png(&format!("{dir}/frame_{k:03}.png"));
+        }
+        println!("Guardados {count} cuadros en {dir}");
         return;
     }
 
@@ -147,9 +195,9 @@ fn main() {
         KeyboardKey::KEY_FOUR,
         KeyboardKey::KEY_FIVE,
         KeyboardKey::KEY_SIX,
-        KeyboardKey::KEY_SEVEN,
     ];
     let mut current = 0;
+    let mut orbit_light = false;
 
     while !rl.window_should_close() {
         for (i, key) in keys.iter().enumerate().take(BODIES.len()) {
@@ -158,14 +206,25 @@ fn main() {
             }
         }
 
+        if rl.is_key_pressed(KeyboardKey::KEY_L) {
+            orbit_light = !orbit_light;
+        }
+
         let time = rl.get_time() as f32;
-        render(&mut fb, &build_scene(BODIES[current].0, &meshes, time), &camera);
+        render(&mut fb, &build_scene(BODIES[current].0, &meshes, time, orbit_light), &camera);
         texture.update_texture(&fb.pixels).expect("No se pudo actualizar la textura");
 
         let mut d = rl.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
         d.draw_texture(&texture, 0, 0, Color::WHITE);
         d.draw_text(&format!("[{}] {}", current + 1, BODIES[current].1), 10, 10, 20, Color::WHITE);
+        d.draw_text(
+            &format!("1-6: cuerpo | L: luz orbitando ({})", if orbit_light { "si" } else { "no" }),
+            10,
+            HEIGHT as i32 - 28,
+            18,
+            Color::GRAY,
+        );
         d.draw_fps(WIDTH as i32 - 90, 10);
     }
 }
