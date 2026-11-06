@@ -1,6 +1,6 @@
 use raylib::prelude::*;
 use crate::fragment::Fragment;
-use crate::framebuffer::Framebuffer;
+use crate::framebuffer::{to_rgba, Framebuffer};
 use crate::obj::Mesh;
 use crate::rasterizer::{rasterize, ScreenTriangle};
 use crate::shaders::{FragmentIn, ShaderFn};
@@ -62,27 +62,44 @@ pub fn render(fb: &mut Framebuffer, scene: &Scene, camera: &Camera) {
         }
     }
 
-    for y in 0..fb.height {
-        for x in 0..fb.width {
-            if let Some((frag, id)) = gbuffer[y * fb.width + x] {
-                let obj = &scene.objects[id];
-                let normal_obj = frag.normal.normalize();
-                let world_pos = obj.rotation.apply(frag.position) * obj.scale + obj.position;
-                let inv = obj.rotation.transpose();
+    // El sombreado es independiente por pixel: se reparte por bandas de filas
+    // entre hilos.
+    let (w, h) = (fb.width, fb.height);
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let rows_per = h.div_ceil(threads);
+    let gbuffer = &gbuffer;
 
-                let input = FragmentIn {
-                    point: frag.position.normalize(),
-                    normal: obj.rotation.apply(normal_obj),
-                    normal_obj,
-                    light: scene.light,
-                    light_obj: inv.apply(scene.light),
-                    view: (camera.position - world_pos).normalize(),
-                    time: scene.time,
-                    rotation: obj.rotation,
-                };
-
-                fb.set_pixel(x, y, (obj.shader)(&input));
-            }
+    std::thread::scope(|s| {
+        for (band, chunk) in fb.pixels.chunks_mut(rows_per * w * 4).enumerate() {
+            s.spawn(move || {
+                for (r, row) in chunk.chunks_mut(w * 4).enumerate() {
+                    let y = band * rows_per + r;
+                    for x in 0..w {
+                        if let Some((frag, id)) = gbuffer[y * w + x] {
+                            let color = shade(&scene.objects[id], &frag, scene, camera);
+                            row[x * 4..x * 4 + 4].copy_from_slice(&to_rgba(color));
+                        }
+                    }
+                }
+            });
         }
-    }
+    });
+}
+
+fn shade(obj: &Object, frag: &Fragment, scene: &Scene, camera: &Camera) -> Vector3 {
+    let normal_obj = frag.normal.normalize();
+    let world_pos = obj.rotation.apply(frag.position) * obj.scale + obj.position;
+
+    let input = FragmentIn {
+        point: frag.position.normalize(),
+        normal: obj.rotation.apply(normal_obj),
+        normal_obj,
+        light: scene.light,
+        light_obj: obj.rotation.transpose().apply(scene.light),
+        view: (camera.position - world_pos).normalize(),
+        time: scene.time,
+        rotation: obj.rotation,
+    };
+
+    (obj.shader)(&input)
 }

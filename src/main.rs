@@ -1,4 +1,5 @@
 mod fragment;
+mod noise;
 mod framebuffer;
 mod obj;
 mod rasterizer;
@@ -18,22 +19,22 @@ const HEIGHT: usize = 600;
 /// Cuerpos celestes disponibles. Cada uno se selecciona con una tecla.
 #[derive(Clone, Copy, PartialEq)]
 enum Body {
-    Basic,
+    Star,
 }
 
-const BODIES: [(Body, &str); 1] = [(Body::Basic, "Esfera de prueba")];
+const BODIES: [(Body, &str); 1] = [(Body::Star, "Estrella")];
 
 fn build_scene<'a>(body: Body, sphere: &'a Mesh, time: f32) -> Scene<'a> {
     let spin = Mat3::rot_y(time * 0.3);
     let light = Vector3::new(-0.6, 0.35, 0.7).normalize();
 
     let objects = match body {
-        Body::Basic => vec![Object {
+        Body::Star => vec![Object {
             mesh: sphere,
             position: Vector3::ZERO,
             scale: 1.0,
             rotation: spin,
-            shader: shaders::basic::basic,
+            shader: shaders::star::star,
         }],
     };
 

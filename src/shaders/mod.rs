@@ -1,7 +1,7 @@
 use raylib::prelude::*;
 use crate::transform::Mat3;
 
-pub mod basic;
+pub mod star;
 
 /// Todo lo que un fragment shader puede consultar sobre su pixel.
 pub struct FragmentIn {

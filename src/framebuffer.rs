@@ -1,5 +1,15 @@
 use raylib::prelude::*;
 
+/// Convierte un color 0..1 (se recorta) a bytes RGBA.
+pub fn to_rgba(rgb: Vector3) -> [u8; 4] {
+    [
+        (rgb.x.clamp(0.0, 1.0) * 255.0) as u8,
+        (rgb.y.clamp(0.0, 1.0) * 255.0) as u8,
+        (rgb.z.clamp(0.0, 1.0) * 255.0) as u8,
+        255,
+    ]
+}
+
 pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
@@ -21,16 +31,6 @@ impl Framebuffer {
         }
     }
 
-    /// Color en rango 0..1 (se recorta).
-    pub fn set_pixel(&mut self, x: usize, y: usize, rgb: Vector3) {
-        if x < self.width && y < self.height {
-            let i = (y * self.width + x) * 4;
-            self.pixels[i] = (rgb.x.clamp(0.0, 1.0) * 255.0) as u8;
-            self.pixels[i + 1] = (rgb.y.clamp(0.0, 1.0) * 255.0) as u8;
-            self.pixels[i + 2] = (rgb.z.clamp(0.0, 1.0) * 255.0) as u8;
-            self.pixels[i + 3] = 255;
-        }
-    }
 
     pub fn save_png(&self, path: &str) {
         let mut img = Image::gen_image_color(self.width as i32, self.height as i32, Color::BLACK);
